@@ -9,25 +9,31 @@
 define('BACKUP', 'ohko@qq.com'); // 备份邮箱
 define('ACCOUNT', __DIR__ . '/account.txt'); // 格式：{imap.mxhichina.com:143}Sent,xx@xx.com,******
 define('HISTORY', __DIR__ . '/history/');
+define('SLEEP_TIME', 15 * 60); // 每15分钟备份一次
 
 $imap = new IMAP_BACKUP();
-$accounts = $imap->getAllAccount();
+while (1) {
+    $accounts = $imap->getAllAccount();
 
-echo date('Y-m-d H:i:s'), "\n";
-foreach ($accounts as $account) {
-    $uids = $imap->getAllUID($account[0], $account[1], $account[2]);
-    $history = $imap->getHistory($account[0], $account[1]);
-    $diff = array_diff($uids, $history);
+    echo date('Y-m-d H:i:s'), "\n";
+    foreach ($accounts as $account) {
+        $uids = $imap->getAllUID($account[0], $account[1], $account[2]);
+        $history = $imap->getHistory($account[0], $account[1]);
+        $diff = array_diff($uids, $history);
 
-    echo str_repeat('=', 50), "\n";
-    echo 'Account: ', $account[0], ' ', $account[1], "\n";
-    echo 'Server  UIDs:', count($uids), "\n";
-    echo 'History UIDs:', count($history), "\n";
+        echo str_repeat('=', 50), "\n";
+        echo 'Account: ', $account[0], ' ', $account[1], "\n";
+        echo 'Server  UIDs:', count($uids), "\n";
+        echo 'History UIDs:', count($history), "\n";
 
-    foreach ($diff as $uid) {
-        echo str_repeat('-', 50), "\n";
-        $imap->backupUIDs($uid);
+        foreach ($diff as $uid) {
+            echo str_repeat('-', 50), "\n";
+            $imap->backupUIDs($uid);
+            break;
+        }
     }
+
+    sleep(SLEEP_TIME);
 }
 
 class IMAP_BACKUP
@@ -95,9 +101,12 @@ class IMAP_BACKUP
         echo 'subject:', $subject, "\n";
         echo 'time:   ', date('Y-m-d H:i:s', $ov[0]->udate), "\n";
 
+        // 去掉body多余的头
+        $header = substr($header, stripos($header, 'Content-Type:'));
+
         // 发送邮件
 //        if (1) {
-        if (imap_mail(BACKUP, "[BACKUP_{$this->box}]" . iconv_mime_decode($ov[0]->subject), $body, $header)) {
+        if (imap_mail(BACKUP, "[BACKUP_{$this->box}_{$from}_{$to}]" . $subject, $body, $header)) {
             // 更新history
             echo "backup: SUCCESS!\n";
             $this->updateHistory($uid);
